@@ -59,6 +59,7 @@ static short gScreenReady = 0;
 
 /*
  * Cache the screen pixmap parameters from the main GDevice.
+ * Always re-validates pixel depth to handle resolution/depth changes.
  */
 static Boolean EnsureScreenInfo(void)
 {
@@ -66,20 +67,23 @@ static Boolean EnsureScreenInfo(void)
     PixMapHandle pmh;
     PixMapPtr pm;
 
-    if (gScreenReady)
-        return true;
-
     mainDev = GetMainDevice();
-    if (!mainDev || !*mainDev)
+    if (!mainDev || !*mainDev) {
+        gScreenReady = 0;
         return false;
+    }
 
     pmh = (**mainDev).gdPMap;
-    if (!pmh || !*pmh)
+    if (!pmh || !*pmh) {
+        gScreenReady = 0;
         return false;
+    }
 
     pm = *pmh;
-    if (pm->pixelSize != 32)
+    if (pm->pixelSize != 32) {
+        gScreenReady = 0;
         return false;
+    }
 
     gScreenBase = pm->baseAddr;
     gScreenRowBytes = pm->rowBytes & 0x3FFF;

@@ -13,9 +13,9 @@ At 32bpp color depth, QuickDraw's `FillCRgn` and `EraseRect` traps fail to prope
 - Icon label backgrounds (the region behind icon text and masks)
 - Icon text editing areas (when renaming files, the border and exposed areas corrupt)
 
-This bug exists in the shipping Mac OS source code but was **never encountered on real hardware**. The Quadra 800's onboard video has 1MB of VRAM - not enough for 32bpp at any usable resolution. The "Millions of Colors" option simply never appeared in the Monitors control panel.
+This bug exists in the shipping Mac OS source code and affects **real hardware**. It was first discovered on a Quadra 700 running Mac OS 8.1 at Millions of Colors, and later confirmed on QEMU Quadra 800 emulation. Any 68k Mac capable of 32bpp output (via onboard video with sufficient VRAM or a NuBus video card) can hit this bug.
 
-So why does it matter now? **QEMU.** The QEMU Quadra 800 emulation provides 4MB of VRAM, unlocking 32bpp mode and exposing this never-tested code path for the first time in 30 years. If you run Mac OS 7.6-8.1 in QEMU at Millions of Colors, you hit this bug immediately.
+It likely went unnoticed for decades because 32bpp was uncommon on 68k Macs - many machines like the Quadra 800 only have 1MB of onboard VRAM, not enough for Millions of Colors at usable resolutions. But machines with more VRAM or NuBus video cards could and did run 32bpp, and QEMU's emulated 4MB VRAM makes it trivially reproducible today.
 
 ## The Fix
 
@@ -77,7 +77,7 @@ The Mac OS desktop background is drawn using a `PixPat` (pixel pattern) - typica
 3. Convert to 32bpp
 4. Write to the framebuffer
 
-Step 3 is where things go wrong. The 32bpp rendering path in QuickDraw was never tested on real hardware because no shipping 68k Mac had enough VRAM for 32bpp at a usable resolution. QEMU's generous 4MB VRAM allocation exposes the bug.
+Step 3 is where things go wrong. The 32bpp rendering path in QuickDraw is broken. It likely saw minimal testing because 32bpp was uncommon on 68k Macs - most onboard video didn't have enough VRAM, so it required a NuBus video card or a machine with expanded VRAM. The bug is easily reproducible on real hardware (confirmed on Quadra 700) and on QEMU (which provides 4MB VRAM to the emulated Q800).
 
 ### How the Fix Works
 
@@ -171,13 +171,13 @@ Note: `-g 800x600x24` requests 32bpp (the `24` refers to 24 bits of color data, 
 ## Compatibility
 
 - **Mac OS**: 7.6, 7.6.1, 8.0, 8.1 (the versions where this pattern rendering bug exists)
-- **Hardware**: Any 68k Mac with 32-bit Color QuickDraw (checks via Gestalt at startup)
-- **Emulation**: Tested on QEMU `q800` machine type
+- **Hardware**: Any 68k Mac with 32-bit Color QuickDraw capable of 32bpp output (checks via Gestalt at startup). Confirmed on Quadra 700.
+- **Emulation**: Also confirmed on QEMU `q800` machine type
 - **Safe**: Does nothing at color depths other than 32bpp (the INIT checks `pixelSize == 32` at startup)
 
 ## License
 
-Public domain. This is a bugfix for 30-year-old software running on emulated hardware. Do whatever you want with it.
+Public domain. This is a bugfix for 30-year-old software. Do whatever you want with it.
 
 ## Discussion
 

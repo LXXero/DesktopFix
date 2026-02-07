@@ -364,8 +364,8 @@ pascal void PatchedFillCRgn(RgnHandle rgn, PixPatHandle pp)
     if (EnsureScreenInfo() && rgn && *rgn && IsWMgrDraw()) {
         bbox = (**rgn).rgnBBox;
 
-        if ((bbox.right - bbox.left) >= 4 &&
-            (bbox.bottom - bbox.top) >= 4 &&
+        if ((bbox.right - bbox.left) >= 1 &&
+            (bbox.bottom - bbox.top) >= 1 &&
             (bbox.right - bbox.left) <= 250 &&
             (bbox.bottom - bbox.top) <= 250 &&
             bbox.top >= LM_MBarHeight &&
@@ -380,19 +380,36 @@ pascal void PatchedFillCRgn(RgnHandle rgn, PixPatHandle pp)
 }
 
 /*
+ * Get the background PixPat from the current port, if it's a CGrafPort.
+ * Returns NULL if it's an old-style GrafPort or has no bkPixPat.
+ */
+static PixPatHandle GetCurrentBkPixPat(void)
+{
+    GrafPtr port;
+    CGrafPtr cport;
+
+    GetPort(&port);
+    if (!port)
+        return NULL;
+
+    /* Check if this is a color port (portVersion has high bits set) */
+    cport = (CGrafPtr)port;
+    if ((cport->portVersion & 0xC000) == 0xC000) {
+        return cport->bkPixPat;
+    }
+
+    return NULL;
+}
+
+/*
  * Patched EraseRect - v14
  *
- * After EraseRect runs, re-render the port's background PixPat
- * directly to the framebuffer. Fixes icon text rename corruption
- * at 32bpp where EraseRect fails to properly tile the desktop pattern.
- *
- * Same guards as FillCRgn patch: WMgrCPort, size limits, menu bar,
- * window structure overlap.
+ * After EraseRect runs, re-render the current port's background PixPat
+ * directly to the framebuffer. Fixes text rename and border corruption
+ * at 32bpp. Works for any color port, not just WMgrCPort.
  */
 pascal void PatchedEraseRect(const Rect *r)
 {
-    CGrafPtr wmPort;
-    GrafPtr currentPort;
     PixPatHandle bkPat;
 
     if (gInPatch) {
@@ -401,24 +418,19 @@ pascal void PatchedEraseRect(const Rect *r)
     }
 
     gInPatch = 1;
-
-    /* Call the original EraseRect */
     gOldEraseRect(r);
 
-    /* Only fix small desktop rects drawn through WMgrCPort */
-    if (EnsureScreenInfo() && r && IsWMgrDraw()) {
-        if ((r->right - r->left) >= 2 &&
-            (r->bottom - r->top) >= 2 &&
-            (r->right - r->left) <= 250 &&
-            (r->bottom - r->top) <= 250 &&
-            r->top >= LM_MBarHeight &&
-            !IsRectInAnyWindowStruc(r)) {
+    if (EnsureScreenInfo() && r &&
+        (r->right - r->left) >= 1 &&
+        (r->bottom - r->top) >= 1 &&
+        (r->right - r->left) <= 300 &&
+        (r->bottom - r->top) <= 300 &&
+        r->top >= LM_MBarHeight &&
+        !IsRectInAnyWindowStruc(r)) {
 
-            /* Get the background PixPat from WMgrCPort */
-            wmPort = *(CGrafPtr *)0x0D2C;
-            if (wmPort && wmPort->bkPixPat) {
-                RenderPatternInRect(r, wmPort->bkPixPat);
-            }
+        bkPat = GetCurrentBkPixPat();
+        if (bkPat) {
+            RenderPatternInRect(r, bkPat);
         }
     }
 
